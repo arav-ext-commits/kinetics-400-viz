@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kinetics-400 Dataset Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+        .chart-container {
+            margin: 30px 0;
+            position: relative;
+            height: 400px;
+        }
+        .chart-container-large {
+            height: 500px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-card h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        .table-container {
+            margin: 30px 0;
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #34495e;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .search-box {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .error {
+            color: red;
+            padding: 10px;
+            background-color: #ffe6e6;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Kinetics-400 Dataset Analysis</h1>
+        <p class="subtitle">Visualization of all 400 action categories with sample counts for train, validation, and test sets</p>
+        
+        <div id="errorMsg" class="error" style="display: none;"></div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Categories</h3>
+                <div class="value">400</div>
+            </div>
+            <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                <h3>Train Samples</h3>
+                <div class="value">246,534</div>
+            </div>
+            <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                <h3>Val Samples</h3>
+                <div class="value">19,906</div>
+            </div>
+            <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                <h3>Test Samples</h3>
+                <div class="value">39,805</div>
+            </div>
+        </div>
+
+        <div class="chart-container chart-container-large">
+            <canvas id="allCategoriesChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="distributionChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="totalSamplesChart"></canvas>
+        </div>
+
+        <div class="chart-container chart-container-large">
+            <canvas id="topBottomChart"></canvas>
+        </div>
+
+        <h2>Complete Category List</h2>
+        <input type="text" id="searchBox" class="search-box" placeholder="Search categories...">
+        <div class="table-container">
+            <table id="categoryTable">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Train</th>
+                        <th>Val</th>
+                        <th>Test</th>
+                        <th>Total</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Check if Chart.js loaded
+        function checkChartJS() {
+            if (typeof Chart === 'undefined') {
+                document.getElementById('errorMsg').style.display = 'block';
+                document.getElementById('errorMsg').innerHTML = 
+                    'Error: Chart.js library failed to load. Please check your internet connection and refresh the page.';
+                return false;
+            }
+            return true;
+        }
+
+        // Wait for Chart.js to load
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (!checkChartJS()) {
+                    return;
+                }
+                initializeCharts();
+            }, 100);
+        });
+
+        function initializeCharts() {
+            try {
+                const categoryData = [{"category": "abseiling", "train": 996, "val": 50, "test": 100, "total": 1146}, {"category": "air drumming", "train": 983, "val": 49, "test": 100, "total": 1132}, {"category": "answering questions", "train": 328, "val": 50, "test": 100, "total": 478}, {"category": "applauding", "train": 261, "val": 50, "test": 100, "total": 411}, {"category": "applying cream", "train": 328, "val": 50, "test": 100, "total": 478}, {"category": "archery", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "arm wrestling", "train": 975, "val": 49, "test": 99, "total": 1123}, {"category": "arranging flowers", "train": 433, "val": 50, "test": 100, "total": 583}, {"category": "assembling computer", "train": 394, "val": 50, "test": 98, "total": 542}, {"category": "auctioning", "train": 328, "val": 50, "test": 100, "total": 478}, {"category": "baby waking up", "train": 462, "val": 50, "test": 99, "total": 611}, {"category": "baking cookies", "train": 778, "val": 49, "test": 100, "total": 927}, {"category": "balloon blowing", "train": 678, "val": 49, "test": 99, "total": 826}, {"category": "bandaging", "train": 419, "val": 50, "test": 100, "total": 569}, {"category": "barbequing", "train": 920, "val": 50, "test": 100, "total": 1070}, {"category": "bartending", "train": 451, "val": 50, "test": 100, "total": 601}, {"category": "beatboxing", "train": 793, "val": 50, "test": 100, "total": 943}, {"category": "bee keeping", "train": 280, "val": 50, "test": 100, "total": 430}, {"category": "belly dancing", "train": 969, "val": 49, "test": 97, "total": 1115}, {"category": "bench pressing", "train": 956, "val": 50, "test": 100, "total": 1106}, {"category": "bending back", "train": 485, "val": 50, "test": 100, "total": 635}, {"category": "bending metal", "train": 260, "val": 50, "test": 100, "total": 410}, {"category": "biking through snow", "train": 902, "val": 50, "test": 100, "total": 1052}, {"category": "blasting sand", "train": 564, "val": 50, "test": 99, "total": 713}, {"category": "blowing glass", "train": 995, "val": 50, "test": 100, "total": 1145}, {"category": "blowing leaves", "train": 255, "val": 50, "test": 100, "total": 405}, {"category": "blowing nose", "train": 447, "val": 50, "test": 100, "total": 597}, {"category": "blowing out candles", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "bobsledding", "train": 455, "val": 50, "test": 100, "total": 605}, {"category": "bookbinding", "train": 764, "val": 50, "test": 100, "total": 914}, {"category": "bouncing on trampoline", "train": 540, "val": 50, "test": 100, "total": 690}, {"category": "bowling", "train": 931, "val": 49, "test": 99, "total": 1079}, {"category": "braiding hair", "train": 632, "val": 50, "test": 98, "total": 780}, {"category": "breading or breadcrumbing", "train": 304, "val": 50, "test": 100, "total": 454}, {"category": "breakdancing", "train": 798, "val": 50, "test": 100, "total": 948}, {"category": "brush painting", "train": 385, "val": 49, "test": 98, "total": 532}, {"category": "brushing hair", "train": 785, "val": 50, "test": 99, "total": 934}, {"category": "brushing teeth", "train": 999, "val": 50, "test": 100, "total": 1149}, {"category": "building cabinet", "train": 281, "val": 50, "test": 100, "total": 431}, {"category": "building shed", "train": 278, "val": 50, "test": 99, "total": 427}, {"category": "bungee jumping", "train": 907, "val": 50, "test": 99, "total": 1056}, {"category": "busking", "train": 701, "val": 50, "test": 100, "total": 851}, {"category": "canoeing or kayaking", "train": 997, "val": 50, "test": 99, "total": 1146}, {"category": "capoeira", "train": 942, "val": 50, "test": 100, "total": 1092}, {"category": "carrying baby", "train": 408, "val": 50, "test": 100, "total": 558}, {"category": "cartwheeling", "train": 467, "val": 50, "test": 99, "total": 616}, {"category": "carving pumpkin", "train": 563, "val": 49, "test": 99, "total": 711}, {"category": "catching fish", "train": 521, "val": 50, "test": 100, "total": 671}, {"category": "catching or throwing baseball", "train": 606, "val": 50, "test": 100, "total": 756}, {"category": "catching or throwing frisbee", "train": 910, "val": 50, "test": 100, "total": 1060}, {"category": "catching or throwing softball", "train": 692, "val": 50, "test": 100, "total": 842}, {"category": "celebrating", "train": 601, "val": 50, "test": 100, "total": 751}, {"category": "changing oil", "train": 564, "val": 50, "test": 100, "total": 714}, {"category": "changing wheel", "train": 311, "val": 50, "test": 98, "total": 459}, {"category": "checking tires", "train": 405, "val": 50, "test": 100, "total": 555}, {"category": "cheerleading", "train": 995, "val": 50, "test": 100, "total": 1145}, {"category": "chopping wood", "train": 767, "val": 49, "test": 100, "total": 916}, {"category": "clapping", "train": 343, "val": 49, "test": 99, "total": 491}, {"category": "clay pottery making", "train": 363, "val": 50, "test": 100, "total": 513}, {"category": "clean and jerk", "train": 753, "val": 49, "test": 100, "total": 902}, {"category": "cleaning floor", "train": 724, "val": 50, "test": 100, "total": 874}, {"category": "cleaning gutters", "train": 448, "val": 50, "test": 100, "total": 598}, {"category": "cleaning pool", "train": 297, "val": 50, "test": 100, "total": 447}, {"category": "cleaning shoes", "train": 560, "val": 49, "test": 97, "total": 706}, {"category": "cleaning toilet", "train": 426, "val": 50, "test": 100, "total": 576}, {"category": "cleaning windows", "train": 545, "val": 50, "test": 100, "total": 695}, {"category": "climbing a rope", "train": 263, "val": 50, "test": 100, "total": 413}, {"category": "climbing ladder", "train": 512, "val": 50, "test": 100, "total": 662}, {"category": "climbing tree", "train": 970, "val": 50, "test": 100, "total": 1120}, {"category": "contact juggling", "train": 987, "val": 50, "test": 98, "total": 1135}, {"category": "cooking chicken", "train": 850, "val": 50, "test": 100, "total": 1000}, {"category": "cooking egg", "train": 469, "val": 50, "test": 99, "total": 618}, {"category": "cooking on campfire", "train": 254, "val": 50, "test": 99, "total": 403}, {"category": "cooking sausages", "train": 318, "val": 50, "test": 99, "total": 467}, {"category": "counting money", "train": 524, "val": 50, "test": 100, "total": 674}, {"category": "country line dancing", "train": 865, "val": 50, "test": 100, "total": 1015}, {"category": "cracking neck", "train": 300, "val": 50, "test": 99, "total": 449}, {"category": "crawling baby", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "crossing river", "train": 801, "val": 50, "test": 100, "total": 951}, {"category": "crying", "train": 890, "val": 50, "test": 97, "total": 1037}, {"category": "curling hair", "train": 705, "val": 50, "test": 100, "total": 855}, {"category": "cutting nails", "train": 413, "val": 49, "test": 98, "total": 560}, {"category": "cutting pineapple", "train": 562, "val": 50, "test": 100, "total": 712}, {"category": "cutting watermelon", "train": 618, "val": 50, "test": 99, "total": 767}, {"category": "dancing ballet", "train": 994, "val": 50, "test": 100, "total": 1144}, {"category": "dancing charleston", "train": 573, "val": 49, "test": 99, "total": 721}, {"category": "dancing gangnam style", "train": 690, "val": 49, "test": 97, "total": 836}, {"category": "dancing macarena", "train": 809, "val": 50, "test": 99, "total": 958}, {"category": "deadlifting", "train": 656, "val": 49, "test": 100, "total": 805}, {"category": "decorating the christmas tree", "train": 463, "val": 49, "test": 100, "total": 612}, {"category": "digging", "train": 255, "val": 50, "test": 99, "total": 404}, {"category": "dining", "train": 522, "val": 50, "test": 99, "total": 671}, {"category": "disc golfing", "train": 415, "val": 50, "test": 100, "total": 565}, {"category": "diving cliff", "train": 926, "val": 49, "test": 100, "total": 1075}, {"category": "dodgeball", "train": 445, "val": 50, "test": 100, "total": 595}, {"category": "doing aerobics", "train": 312, "val": 50, "test": 99, "total": 461}, {"category": "doing laundry", "train": 311, "val": 50, "test": 100, "total": 461}, {"category": "doing nails", "train": 800, "val": 49, "test": 100, "total": 949}, {"category": "drawing", "train": 296, "val": 49, "test": 100, "total": 445}, {"category": "dribbling basketball", "train": 773, "val": 50, "test": 100, "total": 923}, {"category": "drinking", "train": 451, "val": 49, "test": 99, "total": 599}, {"category": "drinking beer", "train": 427, "val": 50, "test": 98, "total": 575}, {"category": "drinking shots", "train": 255, "val": 49, "test": 99, "total": 403}, {"category": "driving car", "train": 971, "val": 48, "test": 99, "total": 1118}, {"category": "driving tractor", "train": 772, "val": 50, "test": 100, "total": 922}, {"category": "drop kicking", "train": 568, "val": 49, "test": 99, "total": 716}, {"category": "drumming fingers", "train": 259, "val": 50, "test": 100, "total": 409}, {"category": "dunking basketball", "train": 957, "val": 49, "test": 99, "total": 1105}, {"category": "dying hair", "train": 931, "val": 48, "test": 93, "total": 1072}, {"category": "eating burger", "train": 716, "val": 49, "test": 99, "total": 864}, {"category": "eating cake", "train": 344, "val": 50, "test": 100, "total": 494}, {"category": "eating carrots", "train": 366, "val": 50, "test": 100, "total": 516}, {"category": "eating chips", "train": 600, "val": 50, "test": 99, "total": 749}, {"category": "eating doughnuts", "train": 379, "val": 49, "test": 100, "total": 528}, {"category": "eating hotdog", "train": 420, "val": 50, "test": 100, "total": 570}, {"category": "eating ice cream", "train": 777, "val": 50, "test": 100, "total": 927}, {"category": "eating spaghetti", "train": 996, "val": 50, "test": 99, "total": 1145}, {"category": "eating watermelon", "train": 400, "val": 50, "test": 100, "total": 550}, {"category": "egg hunting", "train": 350, "val": 50, "test": 100, "total": 500}, {"category": "exercising arm", "train": 267, "val": 50, "test": 99, "total": 416}, {"category": "exercising with an exercise ball", "train": 290, "val": 48, "test": 100, "total": 438}, {"category": "extinguishing fire", "train": 452, "val": 50, "test": 100, "total": 602}, {"category": "faceplanting", "train": 291, "val": 50, "test": 100, "total": 441}, {"category": "feeding birds", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "feeding fish", "train": 824, "val": 49, "test": 100, "total": 973}, {"category": "feeding goats", "train": 877, "val": 50, "test": 100, "total": 1027}, {"category": "filling eyebrows", "train": 939, "val": 49, "test": 97, "total": 1085}, {"category": "finger snapping", "train": 675, "val": 50, "test": 100, "total": 825}, {"category": "fixing hair", "train": 527, "val": 49, "test": 100, "total": 676}, {"category": "flipping pancake", "train": 572, "val": 49, "test": 99, "total": 720}, {"category": "flying kite", "train": 914, "val": 50, "test": 99, "total": 1063}, {"category": "folding clothes", "train": 545, "val": 50, "test": 100, "total": 695}, {"category": "folding napkins", "train": 726, "val": 49, "test": 99, "total": 874}, {"category": "folding paper", "train": 790, "val": 50, "test": 100, "total": 940}, {"category": "front raises", "train": 812, "val": 50, "test": 100, "total": 962}, {"category": "frying vegetables", "train": 458, "val": 50, "test": 100, "total": 608}, {"category": "garbage collecting", "train": 292, "val": 50, "test": 99, "total": 441}, {"category": "gargling", "train": 281, "val": 50, "test": 99, "total": 430}, {"category": "getting a haircut", "train": 508, "val": 50, "test": 100, "total": 658}, {"category": "getting a tattoo", "train": 590, "val": 49, "test": 98, "total": 737}, {"category": "giving or receiving award", "train": 803, "val": 50, "test": 100, "total": 953}, {"category": "golf chipping", "train": 549, "val": 50, "test": 100, "total": 699}, {"category": "golf driving", "train": 686, "val": 50, "test": 100, "total": 836}, {"category": "golf putting", "train": 932, "val": 49, "test": 100, "total": 1081}, {"category": "grinding meat", "train": 265, "val": 50, "test": 100, "total": 415}, {"category": "grooming dog", "train": 463, "val": 50, "test": 100, "total": 613}, {"category": "grooming horse", "train": 496, "val": 49, "test": 100, "total": 645}, {"category": "gymnastics tumbling", "train": 994, "val": 49, "test": 100, "total": 1143}, {"category": "hammer throw", "train": 998, "val": 50, "test": 100, "total": 1148}, {"category": "headbanging", "train": 942, "val": 49, "test": 99, "total": 1090}, {"category": "headbutting", "train": 491, "val": 50, "test": 99, "total": 640}, {"category": "high jump", "train": 806, "val": 50, "test": 98, "total": 954}, {"category": "high kick", "train": 675, "val": 50, "test": 100, "total": 825}, {"category": "hitting baseball", "train": 921, "val": 50, "test": 100, "total": 1071}, {"category": "hockey stop", "train": 318, "val": 50, "test": 100, "total": 468}, {"category": "holding snake", "train": 280, "val": 50, "test": 100, "total": 430}, {"category": "hopscotch", "train": 576, "val": 50, "test": 100, "total": 726}, {"category": "hoverboarding", "train": 414, "val": 50, "test": 100, "total": 564}, {"category": "hugging", "train": 368, "val": 49, "test": 100, "total": 517}, {"category": "hula hooping", "train": 981, "val": 49, "test": 99, "total": 1129}, {"category": "hurdling", "train": 472, "val": 50, "test": 100, "total": 622}, {"category": "hurling (sport)", "train": 687, "val": 50, "test": 99, "total": 836}, {"category": "ice climbing", "train": 695, "val": 50, "test": 100, "total": 845}, {"category": "ice fishing", "train": 405, "val": 50, "test": 100, "total": 555}, {"category": "ice skating", "train": 992, "val": 50, "test": 98, "total": 1140}, {"category": "ironing", "train": 387, "val": 49, "test": 99, "total": 535}, {"category": "javelin throw", "train": 762, "val": 50, "test": 100, "total": 912}, {"category": "jetskiing", "train": 990, "val": 50, "test": 100, "total": 1140}, {"category": "jogging", "train": 269, "val": 50, "test": 98, "total": 417}, {"category": "juggling balls", "train": 773, "val": 50, "test": 100, "total": 923}, {"category": "juggling fire", "train": 518, "val": 50, "test": 100, "total": 668}, {"category": "juggling soccer ball", "train": 334, "val": 50, "test": 100, "total": 484}, {"category": "jumping into pool", "train": 983, "val": 50, "test": 100, "total": 1133}, {"category": "jumpstyle dancing", "train": 513, "val": 50, "test": 99, "total": 662}, {"category": "kicking field goal", "train": 683, "val": 50, "test": 100, "total": 833}, {"category": "kicking soccer ball", "train": 394, "val": 50, "test": 100, "total": 544}, {"category": "kissing", "train": 583, "val": 50, "test": 100, "total": 733}, {"category": "kitesurfing", "train": 646, "val": 50, "test": 98, "total": 794}, {"category": "knitting", "train": 541, "val": 50, "test": 100, "total": 691}, {"category": "krumping", "train": 509, "val": 49, "test": 99, "total": 657}, {"category": "laughing", "train": 776, "val": 50, "test": 100, "total": 926}, {"category": "laying bricks", "train": 282, "val": 50, "test": 100, "total": 432}, {"category": "long jump", "train": 682, "val": 50, "test": 99, "total": 831}, {"category": "lunge", "train": 609, "val": 50, "test": 100, "total": 759}, {"category": "making a cake", "train": 313, "val": 50, "test": 100, "total": 463}, {"category": "making a sandwich", "train": 290, "val": 50, "test": 100, "total": 440}, {"category": "making bed", "train": 529, "val": 50, "test": 100, "total": 679}, {"category": "making jewelry", "train": 509, "val": 49, "test": 100, "total": 658}, {"category": "making pizza", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "making snowman", "train": 608, "val": 50, "test": 98, "total": 756}, {"category": "making sushi", "train": 284, "val": 50, "test": 100, "total": 434}, {"category": "making tea", "train": 276, "val": 50, "test": 100, "total": 426}, {"category": "marching", "train": 997, "val": 50, "test": 99, "total": 1146}, {"category": "massaging back", "train": 970, "val": 49, "test": 94, "total": 1113}, {"category": "massaging feet", "train": 328, "val": 50, "test": 100, "total": 478}, {"category": "massaging legs", "train": 442, "val": 50, "test": 100, "total": 592}, {"category": "massaging person's head", "train": 522, "val": 50, "test": 100, "total": 672}, {"category": "milking cow", "train": 830, "val": 50, "test": 100, "total": 980}, {"category": "mopping floor", "train": 456, "val": 50, "test": 100, "total": 606}, {"category": "motorcycling", "train": 993, "val": 50, "test": 99, "total": 1142}, {"category": "moving furniture", "train": 276, "val": 50, "test": 100, "total": 426}, {"category": "mowing lawn", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "news anchoring", "train": 270, "val": 50, "test": 100, "total": 420}, {"category": "opening bottle", "train": 582, "val": 50, "test": 100, "total": 732}, {"category": "opening present", "train": 716, "val": 50, "test": 100, "total": 866}, {"category": "paragliding", "train": 650, "val": 50, "test": 100, "total": 800}, {"category": "parasailing", "train": 613, "val": 50, "test": 99, "total": 762}, {"category": "parkour", "train": 357, "val": 48, "test": 99, "total": 504}, {"category": "passing American football (in game)", "train": 713, "val": 50, "test": 100, "total": 863}, {"category": "passing American football (not in game)", "train": 895, "val": 50, "test": 100, "total": 1045}, {"category": "peeling apples", "train": 442, "val": 50, "test": 100, "total": 592}, {"category": "peeling potatoes", "train": 307, "val": 50, "test": 100, "total": 457}, {"category": "petting animal (not cat)", "train": 608, "val": 49, "test": 100, "total": 757}, {"category": "petting cat", "train": 606, "val": 50, "test": 100, "total": 756}, {"category": "picking fruit", "train": 644, "val": 50, "test": 99, "total": 793}, {"category": "planting trees", "train": 407, "val": 50, "test": 100, "total": 557}, {"category": "plastering", "train": 278, "val": 50, "test": 100, "total": 428}, {"category": "playing accordion", "train": 776, "val": 49, "test": 100, "total": 925}, {"category": "playing badminton", "train": 795, "val": 50, "test": 99, "total": 944}, {"category": "playing bagpipes", "train": 688, "val": 50, "test": 100, "total": 838}, {"category": "playing basketball", "train": 995, "val": 50, "test": 99, "total": 1144}, {"category": "playing bass guitar", "train": 986, "val": 50, "test": 99, "total": 1135}, {"category": "playing cards", "train": 587, "val": 50, "test": 100, "total": 737}, {"category": "playing cello", "train": 932, "val": 50, "test": 99, "total": 1081}, {"category": "playing chess", "train": 700, "val": 50, "test": 100, "total": 850}, {"category": "playing clarinet", "train": 872, "val": 50, "test": 100, "total": 1022}, {"category": "playing controller", "train": 374, "val": 50, "test": 100, "total": 524}, {"category": "playing cricket", "train": 799, "val": 50, "test": 100, "total": 949}, {"category": "playing cymbals", "train": 486, "val": 50, "test": 100, "total": 636}, {"category": "playing didgeridoo", "train": 637, "val": 50, "test": 100, "total": 787}, {"category": "playing drums", "train": 758, "val": 50, "test": 100, "total": 908}, {"category": "playing flute", "train": 325, "val": 50, "test": 100, "total": 475}, {"category": "playing guitar", "train": 985, "val": 50, "test": 100, "total": 1135}, {"category": "playing harmonica", "train": 856, "val": 50, "test": 100, "total": 1006}, {"category": "playing harp", "train": 999, "val": 50, "test": 100, "total": 1149}, {"category": "playing ice hockey", "train": 769, "val": 49, "test": 99, "total": 917}, {"category": "playing keyboard", "train": 567, "val": 48, "test": 100, "total": 715}, {"category": "playing kickball", "train": 318, "val": 50, "test": 100, "total": 468}, {"category": "playing monopoly", "train": 582, "val": 50, "test": 99, "total": 731}, {"category": "playing organ", "train": 522, "val": 50, "test": 100, "total": 672}, {"category": "playing paintball", "train": 990, "val": 50, "test": 100, "total": 1140}, {"category": "playing piano", "train": 542, "val": 50, "test": 99, "total": 691}, {"category": "playing poker", "train": 985, "val": 49, "test": 100, "total": 1134}, {"category": "playing recorder", "train": 999, "val": 50, "test": 99, "total": 1148}, {"category": "playing saxophone", "train": 767, "val": 50, "test": 99, "total": 916}, {"category": "playing squash or racquetball", "train": 830, "val": 50, "test": 100, "total": 980}, {"category": "playing tennis", "train": 994, "val": 50, "test": 100, "total": 1144}, {"category": "playing trombone", "train": 999, "val": 50, "test": 100, "total": 1149}, {"category": "playing trumpet", "train": 840, "val": 50, "test": 99, "total": 989}, {"category": "playing ukulele", "train": 997, "val": 50, "test": 99, "total": 1146}, {"category": "playing violin", "train": 992, "val": 50, "test": 100, "total": 1142}, {"category": "playing volleyball", "train": 655, "val": 49, "test": 100, "total": 804}, {"category": "playing xylophone", "train": 596, "val": 50, "test": 100, "total": 746}, {"category": "pole vault", "train": 835, "val": 50, "test": 99, "total": 984}, {"category": "presenting weather forecast", "train": 900, "val": 50, "test": 100, "total": 1050}, {"category": "pull ups", "train": 971, "val": 50, "test": 100, "total": 1121}, {"category": "pumping fist", "train": 859, "val": 50, "test": 100, "total": 1009}, {"category": "pumping gas", "train": 396, "val": 49, "test": 99, "total": 544}, {"category": "punching bag", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "punching person (boxing)", "train": 340, "val": 49, "test": 94, "total": 483}, {"category": "push up", "train": 465, "val": 49, "test": 100, "total": 614}, {"category": "pushing car", "train": 919, "val": 50, "test": 100, "total": 1069}, {"category": "pushing cart", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "pushing wheelchair", "train": 315, "val": 50, "test": 100, "total": 465}, {"category": "reading book", "train": 999, "val": 50, "test": 99, "total": 1148}, {"category": "reading newspaper", "train": 274, "val": 50, "test": 100, "total": 424}, {"category": "recording music", "train": 265, "val": 50, "test": 100, "total": 415}, {"category": "riding a bike", "train": 328, "val": 49, "test": 99, "total": 476}, {"category": "riding camel", "train": 566, "val": 50, "test": 100, "total": 716}, {"category": "riding elephant", "train": 954, "val": 50, "test": 100, "total": 1104}, {"category": "riding mechanical bull", "train": 549, "val": 49, "test": 100, "total": 698}, {"category": "riding mountain bike", "train": 346, "val": 49, "test": 100, "total": 495}, {"category": "riding mule", "train": 326, "val": 50, "test": 100, "total": 476}, {"category": "riding or walking with horse", "train": 985, "val": 48, "test": 98, "total": 1131}, {"category": "riding scooter", "train": 525, "val": 50, "test": 99, "total": 674}, {"category": "riding unicycle", "train": 716, "val": 50, "test": 98, "total": 864}, {"category": "ripping paper", "train": 456, "val": 50, "test": 99, "total": 605}, {"category": "robot dancing", "train": 744, "val": 50, "test": 99, "total": 893}, {"category": "rock climbing", "train": 994, "val": 50, "test": 100, "total": 1144}, {"category": "rock scissors paper", "train": 274, "val": 50, "test": 100, "total": 424}, {"category": "roller skating", "train": 810, "val": 50, "test": 100, "total": 960}, {"category": "running on treadmill", "train": 279, "val": 50, "test": 99, "total": 428}, {"category": "sailing", "train": 718, "val": 49, "test": 100, "total": 867}, {"category": "salsa dancing", "train": 999, "val": 49, "test": 100, "total": 1148}, {"category": "sanding floor", "train": 424, "val": 50, "test": 100, "total": 574}, {"category": "scrambling eggs", "train": 667, "val": 50, "test": 99, "total": 816}, {"category": "scuba diving", "train": 818, "val": 50, "test": 100, "total": 968}, {"category": "setting table", "train": 329, "val": 50, "test": 99, "total": 478}, {"category": "shaking hands", "train": 491, "val": 49, "test": 100, "total": 640}, {"category": "shaking head", "train": 735, "val": 50, "test": 100, "total": 885}, {"category": "sharpening knives", "train": 274, "val": 50, "test": 100, "total": 424}, {"category": "sharpening pencil", "train": 603, "val": 50, "test": 99, "total": 752}, {"category": "shaving head", "train": 822, "val": 50, "test": 99, "total": 971}, {"category": "shaving legs", "train": 360, "val": 50, "test": 99, "total": 509}, {"category": "shearing sheep", "train": 838, "val": 50, "test": 100, "total": 988}, {"category": "shining shoes", "train": 465, "val": 50, "test": 100, "total": 615}, {"category": "shooting basketball", "train": 445, "val": 50, "test": 100, "total": 595}, {"category": "shooting goal (soccer)", "train": 295, "val": 50, "test": 99, "total": 444}, {"category": "shot put", "train": 837, "val": 50, "test": 100, "total": 987}, {"category": "shoveling snow", "train": 729, "val": 50, "test": 100, "total": 879}, {"category": "shredding paper", "train": 253, "val": 50, "test": 100, "total": 403}, {"category": "shuffling cards", "train": 678, "val": 50, "test": 100, "total": 828}, {"category": "side kick", "train": 841, "val": 50, "test": 100, "total": 991}, {"category": "sign language interpreting", "train": 304, "val": 48, "test": 94, "total": 446}, {"category": "singing", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "situp", "train": 667, "val": 50, "test": 100, "total": 817}, {"category": "skateboarding", "train": 989, "val": 50, "test": 100, "total": 1139}, {"category": "ski jumping", "train": 901, "val": 50, "test": 100, "total": 1051}, {"category": "skiing (not slalom or crosscountry)", "train": 991, "val": 49, "test": 100, "total": 1140}, {"category": "skiing crosscountry", "train": 327, "val": 50, "test": 100, "total": 477}, {"category": "skiing slalom", "train": 390, "val": 50, "test": 99, "total": 539}, {"category": "skipping rope", "train": 338, "val": 50, "test": 100, "total": 488}, {"category": "skydiving", "train": 355, "val": 50, "test": 100, "total": 505}, {"category": "slacklining", "train": 641, "val": 50, "test": 99, "total": 790}, {"category": "slapping", "train": 317, "val": 50, "test": 98, "total": 465}, {"category": "sled dog racing", "train": 625, "val": 50, "test": 100, "total": 775}, {"category": "smoking", "train": 962, "val": 49, "test": 94, "total": 1105}, {"category": "smoking hookah", "train": 709, "val": 49, "test": 99, "total": 857}, {"category": "snatch weight lifting", "train": 793, "val": 50, "test": 100, "total": 943}, {"category": "sneezing", "train": 355, "val": 50, "test": 100, "total": 505}, {"category": "sniffing", "train": 251, "val": 48, "test": 100, "total": 399}, {"category": "snorkeling", "train": 862, "val": 50, "test": 100, "total": 1012}, {"category": "snowboarding", "train": 790, "val": 48, "test": 99, "total": 937}, {"category": "snowkiting", "train": 996, "val": 50, "test": 99, "total": 1145}, {"category": "snowmobiling", "train": 454, "val": 49, "test": 98, "total": 601}, {"category": "somersaulting", "train": 843, "val": 50, "test": 100, "total": 993}, {"category": "spinning poi", "train": 986, "val": 49, "test": 99, "total": 1134}, {"category": "spray painting", "train": 759, "val": 49, "test": 100, "total": 908}, {"category": "spraying", "train": 320, "val": 50, "test": 100, "total": 470}, {"category": "springboard diving", "train": 257, "val": 50, "test": 99, "total": 406}, {"category": "squat", "train": 999, "val": 50, "test": 99, "total": 1148}, {"category": "sticking tongue out", "train": 621, "val": 50, "test": 99, "total": 770}, {"category": "stomping grapes", "train": 294, "val": 50, "test": 100, "total": 444}, {"category": "stretching arm", "train": 568, "val": 50, "test": 100, "total": 718}, {"category": "stretching leg", "train": 679, "val": 50, "test": 100, "total": 829}, {"category": "strumming guitar", "train": 322, "val": 50, "test": 100, "total": 472}, {"category": "surfing crowd", "train": 728, "val": 49, "test": 99, "total": 876}, {"category": "surfing water", "train": 604, "val": 48, "test": 99, "total": 751}, {"category": "sweeping floor", "train": 454, "val": 50, "test": 100, "total": 604}, {"category": "swimming backstroke", "train": 927, "val": 50, "test": 100, "total": 1077}, {"category": "swimming breast stroke", "train": 683, "val": 50, "test": 100, "total": 833}, {"category": "swimming butterfly stroke", "train": 528, "val": 50, "test": 100, "total": 678}, {"category": "swing dancing", "train": 363, "val": 50, "test": 99, "total": 512}, {"category": "swinging legs", "train": 259, "val": 50, "test": 100, "total": 409}, {"category": "swinging on something", "train": 333, "val": 49, "test": 100, "total": 482}, {"category": "sword fighting", "train": 323, "val": 50, "test": 100, "total": 473}, {"category": "tai chi", "train": 920, "val": 50, "test": 100, "total": 1070}, {"category": "taking a shower", "train": 228, "val": 50, "test": 100, "total": 378}, {"category": "tango dancing", "train": 964, "val": 50, "test": 100, "total": 1114}, {"category": "tap dancing", "train": 800, "val": 49, "test": 98, "total": 947}, {"category": "tapping guitar", "train": 665, "val": 50, "test": 100, "total": 815}, {"category": "tapping pen", "train": 553, "val": 50, "test": 100, "total": 703}, {"category": "tasting beer", "train": 438, "val": 50, "test": 100, "total": 588}, {"category": "tasting food", "train": 463, "val": 50, "test": 100, "total": 613}, {"category": "testifying", "train": 347, "val": 50, "test": 100, "total": 497}, {"category": "texting", "train": 556, "val": 49, "test": 99, "total": 704}, {"category": "throwing axe", "train": 666, "val": 50, "test": 100, "total": 816}, {"category": "throwing ball", "train": 484, "val": 50, "test": 100, "total": 634}, {"category": "throwing discus", "train": 955, "val": 50, "test": 99, "total": 1104}, {"category": "tickling", "train": 460, "val": 50, "test": 100, "total": 610}, {"category": "tobogganing", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "tossing coin", "train": 312, "val": 50, "test": 99, "total": 461}, {"category": "tossing salad", "train": 314, "val": 50, "test": 99, "total": 463}, {"category": "training dog", "train": 332, "val": 50, "test": 99, "total": 481}, {"category": "trapezing", "train": 636, "val": 50, "test": 100, "total": 786}, {"category": "trimming or shaving beard", "train": 832, "val": 50, "test": 99, "total": 981}, {"category": "trimming trees", "train": 515, "val": 50, "test": 100, "total": 665}, {"category": "triple jump", "train": 635, "val": 49, "test": 100, "total": 784}, {"category": "tying bow tie", "train": 237, "val": 50, "test": 100, "total": 387}, {"category": "tying knot (not on a tie)", "train": 695, "val": 50, "test": 99, "total": 844}, {"category": "tying tie", "train": 523, "val": 50, "test": 100, "total": 673}, {"category": "unboxing", "train": 708, "val": 50, "test": 100, "total": 858}, {"category": "unloading truck", "train": 256, "val": 50, "test": 100, "total": 406}, {"category": "using computer", "train": 788, "val": 49, "test": 100, "total": 937}, {"category": "using remote controller (not gaming)", "train": 401, "val": 50, "test": 98, "total": 549}, {"category": "using segway", "train": 238, "val": 50, "test": 99, "total": 387}, {"category": "vault", "train": 412, "val": 50, "test": 100, "total": 562}, {"category": "waiting in line", "train": 280, "val": 50, "test": 100, "total": 430}, {"category": "walking the dog", "train": 995, "val": 50, "test": 100, "total": 1145}, {"category": "washing dishes", "train": 898, "val": 50, "test": 100, "total": 1048}, {"category": "washing feet", "train": 713, "val": 50, "test": 99, "total": 862}, {"category": "washing hair", "train": 277, "val": 49, "test": 97, "total": 423}, {"category": "washing hands", "train": 766, "val": 50, "test": 100, "total": 916}, {"category": "water skiing", "train": 615, "val": 49, "test": 99, "total": 763}, {"category": "water sliding", "train": 270, "val": 50, "test": 100, "total": 420}, {"category": "watering plants", "train": 531, "val": 50, "test": 99, "total": 680}, {"category": "waxing back", "train": 387, "val": 50, "test": 100, "total": 537}, {"category": "waxing chest", "train": 610, "val": 50, "test": 100, "total": 760}, {"category": "waxing eyebrows", "train": 571, "val": 50, "test": 99, "total": 720}, {"category": "waxing legs", "train": 798, "val": 50, "test": 100, "total": 948}, {"category": "weaving basket", "train": 593, "val": 50, "test": 100, "total": 743}, {"category": "welding", "train": 609, "val": 50, "test": 100, "total": 759}, {"category": "whistling", "train": 266, "val": 50, "test": 100, "total": 416}, {"category": "windsurfing", "train": 964, "val": 50, "test": 100, "total": 1114}, {"category": "wrapping present", "train": 711, "val": 50, "test": 100, "total": 861}, {"category": "wrestling", "train": 339, "val": 50, "test": 99, "total": 488}, {"category": "writing", "train": 585, "val": 50, "test": 100, "total": 735}, {"category": "yawning", "train": 249, "val": 50, "test": 99, "total": 398}, {"category": "yoga", "train": 993, "val": 50, "test": 97, "total": 1140}, {"category": "zumba", "train": 952, "val": 46, "test": 95, "total": 1093}];
+                const categoryDataSorted = [{"category": "blowing out candles", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "crawling baby", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "feeding birds", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "punching bag", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "pushing cart", "train": 1000, "val": 50, "test": 100, "total": 1150}, {"category": "brushing teeth", "train": 999, "val": 50, "test": 100, "total": 1149}, {"category": "playing harp", "train": 999, "val": 50, "test": 100, "total": 1149}, {"category": "playing trombone", "train": 999, "val": 50, "test": 100, "total": 1149}, {"category": "hammer throw", "train": 998, "val": 50, "test": 100, "total": 1148}, {"category": "playing recorder", "train": 999, "val": 50, "test": 99, "total": 1148}, {"category": "reading book", "train": 999, "val": 50, "test": 99, "total": 1148}, {"category": "salsa dancing", "train": 999, "val": 49, "test": 100, "total": 1148}, {"category": "squat", "train": 999, "val": 50, "test": 99, "total": 1148}, {"category": "archery", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "making pizza", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "mowing lawn", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "singing", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "tobogganing", "train": 997, "val": 50, "test": 100, "total": 1147}, {"category": "abseiling", "train": 996, "val": 50, "test": 100, "total": 1146}, {"category": "canoeing or kayaking", "train": 997, "val": 50, "test": 99, "total": 1146}, {"category": "marching", "train": 997, "val": 50, "test": 99, "total": 1146}, {"category": "playing ukulele", "train": 997, "val": 50, "test": 99, "total": 1146}, {"category": "blowing glass", "train": 995, "val": 50, "test": 100, "total": 1145}, {"category": "cheerleading", "train": 995, "val": 50, "test": 100, "total": 1145}, {"category": "eating spaghetti", "train": 996, "val": 50, "test": 99, "total": 1145}, {"category": "snowkiting", "train": 996, "val": 50, "test": 99, "total": 1145}, {"category": "walking the dog", "train": 995, "val": 50, "test": 100, "total": 1145}, {"category": "dancing ballet", "train": 994, "val": 50, "test": 100, "total": 1144}, {"category": "playing basketball", "train": 995, "val": 50, "test": 99, "total": 1144}, {"category": "playing tennis", "train": 994, "val": 50, "test": 100, "total": 1144}, {"category": "rock climbing", "train": 994, "val": 50, "test": 100, "total": 1144}, {"category": "gymnastics tumbling", "train": 994, "val": 49, "test": 100, "total": 1143}, {"category": "motorcycling", "train": 993, "val": 50, "test": 99, "total": 1142}, {"category": "playing violin", "train": 992, "val": 50, "test": 100, "total": 1142}, {"category": "ice skating", "train": 992, "val": 50, "test": 98, "total": 1140}, {"category": "jetskiing", "train": 990, "val": 50, "test": 100, "total": 1140}, {"category": "playing paintball", "train": 990, "val": 50, "test": 100, "total": 1140}, {"category": "skiing (not slalom or crosscountry)", "train": 991, "val": 49, "test": 100, "total": 1140}, {"category": "yoga", "train": 993, "val": 50, "test": 97, "total": 1140}, {"category": "skateboarding", "train": 989, "val": 50, "test": 100, "total": 1139}, {"category": "contact juggling", "train": 987, "val": 50, "test": 98, "total": 1135}, {"category": "playing bass guitar", "train": 986, "val": 50, "test": 99, "total": 1135}, {"category": "playing guitar", "train": 985, "val": 50, "test": 100, "total": 1135}, {"category": "playing poker", "train": 985, "val": 49, "test": 100, "total": 1134}, {"category": "spinning poi", "train": 986, "val": 49, "test": 99, "total": 1134}, {"category": "jumping into pool", "train": 983, "val": 50, "test": 100, "total": 1133}, {"category": "air drumming", "train": 983, "val": 49, "test": 100, "total": 1132}, {"category": "riding or walking with horse", "train": 985, "val": 48, "test": 98, "total": 1131}, {"category": "hula hooping", "train": 981, "val": 49, "test": 99, "total": 1129}, {"category": "arm wrestling", "train": 975, "val": 49, "test": 99, "total": 1123}, {"category": "pull ups", "train": 971, "val": 50, "test": 100, "total": 1121}, {"category": "climbing tree", "train": 970, "val": 50, "test": 100, "total": 1120}, {"category": "driving car", "train": 971, "val": 48, "test": 99, "total": 1118}, {"category": "belly dancing", "train": 969, "val": 49, "test": 97, "total": 1115}, {"category": "tango dancing", "train": 964, "val": 50, "test": 100, "total": 1114}, {"category": "windsurfing", "train": 964, "val": 50, "test": 100, "total": 1114}, {"category": "massaging back", "train": 970, "val": 49, "test": 94, "total": 1113}, {"category": "bench pressing", "train": 956, "val": 50, "test": 100, "total": 1106}, {"category": "dunking basketball", "train": 957, "val": 49, "test": 99, "total": 1105}, {"category": "smoking", "train": 962, "val": 49, "test": 94, "total": 1105}, {"category": "riding elephant", "train": 954, "val": 50, "test": 100, "total": 1104}, {"category": "throwing discus", "train": 955, "val": 50, "test": 99, "total": 1104}, {"category": "zumba", "train": 952, "val": 46, "test": 95, "total": 1093}, {"category": "capoeira", "train": 942, "val": 50, "test": 100, "total": 1092}, {"category": "headbanging", "train": 942, "val": 49, "test": 99, "total": 1090}, {"category": "filling eyebrows", "train": 939, "val": 49, "test": 97, "total": 1085}, {"category": "golf putting", "train": 932, "val": 49, "test": 100, "total": 1081}, {"category": "playing cello", "train": 932, "val": 50, "test": 99, "total": 1081}, {"category": "bowling", "train": 931, "val": 49, "test": 99, "total": 1079}, {"category": "swimming backstroke", "train": 927, "val": 50, "test": 100, "total": 1077}, {"category": "diving cliff", "train": 926, "val": 49, "test": 100, "total": 1075}, {"category": "dying hair", "train": 931, "val": 48, "test": 93, "total": 1072}, {"category": "hitting baseball", "train": 921, "val": 50, "test": 100, "total": 1071}, {"category": "barbequing", "train": 920, "val": 50, "test": 100, "total": 1070}, {"category": "tai chi", "train": 920, "val": 50, "test": 100, "total": 1070}, {"category": "pushing car", "train": 919, "val": 50, "test": 100, "total": 1069}, {"category": "flying kite", "train": 914, "val": 50, "test": 99, "total": 1063}, {"category": "catching or throwing frisbee", "train": 910, "val": 50, "test": 100, "total": 1060}, {"category": "bungee jumping", "train": 907, "val": 50, "test": 99, "total": 1056}, {"category": "biking through snow", "train": 902, "val": 50, "test": 100, "total": 1052}, {"category": "ski jumping", "train": 901, "val": 50, "test": 100, "total": 1051}, {"category": "presenting weather forecast", "train": 900, "val": 50, "test": 100, "total": 1050}, {"category": "washing dishes", "train": 898, "val": 50, "test": 100, "total": 1048}, {"category": "passing American football (not in game)", "train": 895, "val": 50, "test": 100, "total": 1045}, {"category": "crying", "train": 890, "val": 50, "test": 97, "total": 1037}, {"category": "feeding goats", "train": 877, "val": 50, "test": 100, "total": 1027}, {"category": "playing clarinet", "train": 872, "val": 50, "test": 100, "total": 1022}, {"category": "country line dancing", "train": 865, "val": 50, "test": 100, "total": 1015}, {"category": "snorkeling", "train": 862, "val": 50, "test": 100, "total": 1012}, {"category": "pumping fist", "train": 859, "val": 50, "test": 100, "total": 1009}, {"category": "playing harmonica", "train": 856, "val": 50, "test": 100, "total": 1006}, {"category": "cooking chicken", "train": 850, "val": 50, "test": 100, "total": 1000}, {"category": "somersaulting", "train": 843, "val": 50, "test": 100, "total": 993}, {"category": "side kick", "train": 841, "val": 50, "test": 100, "total": 991}, {"category": "playing trumpet", "train": 840, "val": 50, "test": 99, "total": 989}, {"category": "shearing sheep", "train": 838, "val": 50, "test": 100, "total": 988}, {"category": "shot put", "train": 837, "val": 50, "test": 100, "total": 987}, {"category": "pole vault", "train": 835, "val": 50, "test": 99, "total": 984}, {"category": "trimming or shaving beard", "train": 832, "val": 50, "test": 99, "total": 981}, {"category": "milking cow", "train": 830, "val": 50, "test": 100, "total": 980}, {"category": "playing squash or racquetball", "train": 830, "val": 50, "test": 100, "total": 980}, {"category": "feeding fish", "train": 824, "val": 49, "test": 100, "total": 973}, {"category": "shaving head", "train": 822, "val": 50, "test": 99, "total": 971}, {"category": "scuba diving", "train": 818, "val": 50, "test": 100, "total": 968}, {"category": "front raises", "train": 812, "val": 50, "test": 100, "total": 962}, {"category": "roller skating", "train": 810, "val": 50, "test": 100, "total": 960}, {"category": "dancing macarena", "train": 809, "val": 50, "test": 99, "total": 958}, {"category": "high jump", "train": 806, "val": 50, "test": 98, "total": 954}, {"category": "giving or receiving award", "train": 803, "val": 50, "test": 100, "total": 953}, {"category": "crossing river", "train": 801, "val": 50, "test": 100, "total": 951}, {"category": "doing nails", "train": 800, "val": 49, "test": 100, "total": 949}, {"category": "playing cricket", "train": 799, "val": 50, "test": 100, "total": 949}, {"category": "breakdancing", "train": 798, "val": 50, "test": 100, "total": 948}, {"category": "waxing legs", "train": 798, "val": 50, "test": 100, "total": 948}, {"category": "tap dancing", "train": 800, "val": 49, "test": 98, "total": 947}, {"category": "playing badminton", "train": 795, "val": 50, "test": 99, "total": 944}, {"category": "beatboxing", "train": 793, "val": 50, "test": 100, "total": 943}, {"category": "snatch weight lifting", "train": 793, "val": 50, "test": 100, "total": 943}, {"category": "folding paper", "train": 790, "val": 50, "test": 100, "total": 940}, {"category": "snowboarding", "train": 790, "val": 48, "test": 99, "total": 937}, {"category": "using computer", "train": 788, "val": 49, "test": 100, "total": 937}, {"category": "brushing hair", "train": 785, "val": 50, "test": 99, "total": 934}, {"category": "baking cookies", "train": 778, "val": 49, "test": 100, "total": 927}, {"category": "eating ice cream", "train": 777, "val": 50, "test": 100, "total": 927}, {"category": "laughing", "train": 776, "val": 50, "test": 100, "total": 926}, {"category": "playing accordion", "train": 776, "val": 49, "test": 100, "total": 925}, {"category": "dribbling basketball", "train": 773, "val": 50, "test": 100, "total": 923}, {"category": "juggling balls", "train": 773, "val": 50, "test": 100, "total": 923}, {"category": "driving tractor", "train": 772, "val": 50, "test": 100, "total": 922}, {"category": "playing ice hockey", "train": 769, "val": 49, "test": 99, "total": 917}, {"category": "chopping wood", "train": 767, "val": 49, "test": 100, "total": 916}, {"category": "playing saxophone", "train": 767, "val": 50, "test": 99, "total": 916}, {"category": "washing hands", "train": 766, "val": 50, "test": 100, "total": 916}, {"category": "bookbinding", "train": 764, "val": 50, "test": 100, "total": 914}, {"category": "javelin throw", "train": 762, "val": 50, "test": 100, "total": 912}, {"category": "playing drums", "train": 758, "val": 50, "test": 100, "total": 908}, {"category": "spray painting", "train": 759, "val": 49, "test": 100, "total": 908}, {"category": "clean and jerk", "train": 753, "val": 49, "test": 100, "total": 902}, {"category": "robot dancing", "train": 744, "val": 50, "test": 99, "total": 893}, {"category": "shaking head", "train": 735, "val": 50, "test": 100, "total": 885}, {"category": "shoveling snow", "train": 729, "val": 50, "test": 100, "total": 879}, {"category": "surfing crowd", "train": 728, "val": 49, "test": 99, "total": 876}, {"category": "cleaning floor", "train": 724, "val": 50, "test": 100, "total": 874}, {"category": "folding napkins", "train": 726, "val": 49, "test": 99, "total": 874}, {"category": "sailing", "train": 718, "val": 49, "test": 100, "total": 867}, {"category": "opening present", "train": 716, "val": 50, "test": 100, "total": 866}, {"category": "eating burger", "train": 716, "val": 49, "test": 99, "total": 864}, {"category": "riding unicycle", "train": 716, "val": 50, "test": 98, "total": 864}, {"category": "passing American football (in game)", "train": 713, "val": 50, "test": 100, "total": 863}, {"category": "washing feet", "train": 713, "val": 50, "test": 99, "total": 862}, {"category": "wrapping present", "train": 711, "val": 50, "test": 100, "total": 861}, {"category": "unboxing", "train": 708, "val": 50, "test": 100, "total": 858}, {"category": "smoking hookah", "train": 709, "val": 49, "test": 99, "total": 857}, {"category": "curling hair", "train": 705, "val": 50, "test": 100, "total": 855}, {"category": "busking", "train": 701, "val": 50, "test": 100, "total": 851}, {"category": "playing chess", "train": 700, "val": 50, "test": 100, "total": 850}, {"category": "ice climbing", "train": 695, "val": 50, "test": 100, "total": 845}, {"category": "tying knot (not on a tie)", "train": 695, "val": 50, "test": 99, "total": 844}, {"category": "catching or throwing softball", "train": 692, "val": 50, "test": 100, "total": 842}, {"category": "playing bagpipes", "train": 688, "val": 50, "test": 100, "total": 838}, {"category": "dancing gangnam style", "train": 690, "val": 49, "test": 97, "total": 836}, {"category": "golf driving", "train": 686, "val": 50, "test": 100, "total": 836}, {"category": "hurling (sport)", "train": 687, "val": 50, "test": 99, "total": 836}, {"category": "kicking field goal", "train": 683, "val": 50, "test": 100, "total": 833}, {"category": "swimming breast stroke", "train": 683, "val": 50, "test": 100, "total": 833}, {"category": "long jump", "train": 682, "val": 50, "test": 99, "total": 831}, {"category": "stretching leg", "train": 679, "val": 50, "test": 100, "total": 829}, {"category": "shuffling cards", "train": 678, "val": 50, "test": 100, "total": 828}, {"category": "balloon blowing", "train": 678, "val": 49, "test": 99, "total": 826}, {"category": "finger snapping", "train": 675, "val": 50, "test": 100, "total": 825}, {"category": "high kick", "train": 675, "val": 50, "test": 100, "total": 825}, {"category": "situp", "train": 667, "val": 50, "test": 100, "total": 817}, {"category": "scrambling eggs", "train": 667, "val": 50, "test": 99, "total": 816}, {"category": "throwing axe", "train": 666, "val": 50, "test": 100, "total": 816}, {"category": "tapping guitar", "train": 665, "val": 50, "test": 100, "total": 815}, {"category": "deadlifting", "train": 656, "val": 49, "test": 100, "total": 805}, {"category": "playing volleyball", "train": 655, "val": 49, "test": 100, "total": 804}, {"category": "paragliding", "train": 650, "val": 50, "test": 100, "total": 800}, {"category": "kitesurfing", "train": 646, "val": 50, "test": 98, "total": 794}, {"category": "picking fruit", "train": 644, "val": 50, "test": 99, "total": 793}, {"category": "slacklining", "train": 641, "val": 50, "test": 99, "total": 790}, {"category": "playing didgeridoo", "train": 637, "val": 50, "test": 100, "total": 787}, {"category": "trapezing", "train": 636, "val": 50, "test": 100, "total": 786}, {"category": "triple jump", "train": 635, "val": 49, "test": 100, "total": 784}, {"category": "braiding hair", "train": 632, "val": 50, "test": 98, "total": 780}, {"category": "sled dog racing", "train": 625, "val": 50, "test": 100, "total": 775}, {"category": "sticking tongue out", "train": 621, "val": 50, "test": 99, "total": 770}, {"category": "cutting watermelon", "train": 618, "val": 50, "test": 99, "total": 767}, {"category": "water skiing", "train": 615, "val": 49, "test": 99, "total": 763}, {"category": "parasailing", "train": 613, "val": 50, "test": 99, "total": 762}, {"category": "waxing chest", "train": 610, "val": 50, "test": 100, "total": 760}, {"category": "lunge", "train": 609, "val": 50, "test": 100, "total": 759}, {"category": "welding", "train": 609, "val": 50, "test": 100, "total": 759}, {"category": "petting animal (not cat)", "train": 608, "val": 49, "test": 100, "total": 757}, {"category": "catching or throwing baseball", "train": 606, "val": 50, "test": 100, "total": 756}, {"category": "making snowman", "train": 608, "val": 50, "test": 98, "total": 756}, {"category": "petting cat", "train": 606, "val": 50, "test": 100, "total": 756}, {"category": "sharpening pencil", "train": 603, "val": 50, "test": 99, "total": 752}, {"category": "celebrating", "train": 601, "val": 50, "test": 100, "total": 751}, {"category": "surfing water", "train": 604, "val": 48, "test": 99, "total": 751}, {"category": "eating chips", "train": 600, "val": 50, "test": 99, "total": 749}, {"category": "playing xylophone", "train": 596, "val": 50, "test": 100, "total": 746}, {"category": "weaving basket", "train": 593, "val": 50, "test": 100, "total": 743}, {"category": "getting a tattoo", "train": 590, "val": 49, "test": 98, "total": 737}, {"category": "playing cards", "train": 587, "val": 50, "test": 100, "total": 737}, {"category": "writing", "train": 585, "val": 50, "test": 100, "total": 735}, {"category": "kissing", "train": 583, "val": 50, "test": 100, "total": 733}, {"category": "opening bottle", "train": 582, "val": 50, "test": 100, "total": 732}, {"category": "playing monopoly", "train": 582, "val": 50, "test": 99, "total": 731}, {"category": "hopscotch", "train": 576, "val": 50, "test": 100, "total": 726}, {"category": "dancing charleston", "train": 573, "val": 49, "test": 99, "total": 721}, {"category": "flipping pancake", "train": 572, "val": 49, "test": 99, "total": 720}, {"category": "waxing eyebrows", "train": 571, "val": 50, "test": 99, "total": 720}, {"category": "stretching arm", "train": 568, "val": 50, "test": 100, "total": 718}, {"category": "drop kicking", "train": 568, "val": 49, "test": 99, "total": 716}, {"category": "riding camel", "train": 566, "val": 50, "test": 100, "total": 716}, {"category": "playing keyboard", "train": 567, "val": 48, "test": 100, "total": 715}, {"category": "changing oil", "train": 564, "val": 50, "test": 100, "total": 714}, {"category": "blasting sand", "train": 564, "val": 50, "test": 99, "total": 713}, {"category": "cutting pineapple", "train": 562, "val": 50, "test": 100, "total": 712}, {"category": "carving pumpkin", "train": 563, "val": 49, "test": 99, "total": 711}, {"category": "cleaning shoes", "train": 560, "val": 49, "test": 97, "total": 706}, {"category": "texting", "train": 556, "val": 49, "test": 99, "total": 704}, {"category": "tapping pen", "train": 553, "val": 50, "test": 100, "total": 703}, {"category": "golf chipping", "train": 549, "val": 50, "test": 100, "total": 699}, {"category": "riding mechanical bull", "train": 549, "val": 49, "test": 100, "total": 698}, {"category": "cleaning windows", "train": 545, "val": 50, "test": 100, "total": 695}, {"category": "folding clothes", "train": 545, "val": 50, "test": 100, "total": 695}, {"category": "knitting", "train": 541, "val": 50, "test": 100, "total": 691}, {"category": "playing piano", "train": 542, "val": 50, "test": 99, "total": 691}, {"category": "bouncing on trampoline", "train": 540, "val": 50, "test": 100, "total": 690}, {"category": "watering plants", "train": 531, "val": 50, "test": 99, "total": 680}, {"category": "making bed", "train": 529, "val": 50, "test": 100, "total": 679}, {"category": "swimming butterfly stroke", "train": 528, "val": 50, "test": 100, "total": 678}, {"category": "fixing hair", "train": 527, "val": 49, "test": 100, "total": 676}, {"category": "counting money", "train": 524, "val": 50, "test": 100, "total": 674}, {"category": "riding scooter", "train": 525, "val": 50, "test": 99, "total": 674}, {"category": "tying tie", "train": 523, "val": 50, "test": 100, "total": 673}, {"category": "massaging person's head", "train": 522, "val": 50, "test": 100, "total": 672}, {"category": "playing organ", "train": 522, "val": 50, "test": 100, "total": 672}, {"category": "catching fish", "train": 521, "val": 50, "test": 100, "total": 671}, {"category": "dining", "train": 522, "val": 50, "test": 99, "total": 671}, {"category": "juggling fire", "train": 518, "val": 50, "test": 100, "total": 668}, {"category": "trimming trees", "train": 515, "val": 50, "test": 100, "total": 665}, {"category": "climbing ladder", "train": 512, "val": 50, "test": 100, "total": 662}, {"category": "jumpstyle dancing", "train": 513, "val": 50, "test": 99, "total": 662}, {"category": "getting a haircut", "train": 508, "val": 50, "test": 100, "total": 658}, {"category": "making jewelry", "train": 509, "val": 49, "test": 100, "total": 658}, {"category": "krumping", "train": 509, "val": 49, "test": 99, "total": 657}, {"category": "grooming horse", "train": 496, "val": 49, "test": 100, "total": 645}, {"category": "headbutting", "train": 491, "val": 50, "test": 99, "total": 640}, {"category": "shaking hands", "train": 491, "val": 49, "test": 100, "total": 640}, {"category": "playing cymbals", "train": 486, "val": 50, "test": 100, "total": 636}, {"category": "bending back", "train": 485, "val": 50, "test": 100, "total": 635}, {"category": "throwing ball", "train": 484, "val": 50, "test": 100, "total": 634}, {"category": "hurdling", "train": 472, "val": 50, "test": 100, "total": 622}, {"category": "cooking egg", "train": 469, "val": 50, "test": 99, "total": 618}, {"category": "cartwheeling", "train": 467, "val": 50, "test": 99, "total": 616}, {"category": "shining shoes", "train": 465, "val": 50, "test": 100, "total": 615}, {"category": "push up", "train": 465, "val": 49, "test": 100, "total": 614}, {"category": "grooming dog", "train": 463, "val": 50, "test": 100, "total": 613}, {"category": "tasting food", "train": 463, "val": 50, "test": 100, "total": 613}, {"category": "decorating the christmas tree", "train": 463, "val": 49, "test": 100, "total": 612}, {"category": "baby waking up", "train": 462, "val": 50, "test": 99, "total": 611}, {"category": "tickling", "train": 460, "val": 50, "test": 100, "total": 610}, {"category": "frying vegetables", "train": 458, "val": 50, "test": 100, "total": 608}, {"category": "mopping floor", "train": 456, "val": 50, "test": 100, "total": 606}, {"category": "bobsledding", "train": 455, "val": 50, "test": 100, "total": 605}, {"category": "ripping paper", "train": 456, "val": 50, "test": 99, "total": 605}, {"category": "sweeping floor", "train": 454, "val": 50, "test": 100, "total": 604}, {"category": "extinguishing fire", "train": 452, "val": 50, "test": 100, "total": 602}, {"category": "bartending", "train": 451, "val": 50, "test": 100, "total": 601}, {"category": "snowmobiling", "train": 454, "val": 49, "test": 98, "total": 601}, {"category": "drinking", "train": 451, "val": 49, "test": 99, "total": 599}, {"category": "cleaning gutters", "train": 448, "val": 50, "test": 100, "total": 598}, {"category": "blowing nose", "train": 447, "val": 50, "test": 100, "total": 597}, {"category": "dodgeball", "train": 445, "val": 50, "test": 100, "total": 595}, {"category": "shooting basketball", "train": 445, "val": 50, "test": 100, "total": 595}, {"category": "massaging legs", "train": 442, "val": 50, "test": 100, "total": 592}, {"category": "peeling apples", "train": 442, "val": 50, "test": 100, "total": 592}, {"category": "tasting beer", "train": 438, "val": 50, "test": 100, "total": 588}, {"category": "arranging flowers", "train": 433, "val": 50, "test": 100, "total": 583}, {"category": "cleaning toilet", "train": 426, "val": 50, "test": 100, "total": 576}, {"category": "drinking beer", "train": 427, "val": 50, "test": 98, "total": 575}, {"category": "sanding floor", "train": 424, "val": 50, "test": 100, "total": 574}, {"category": "eating hotdog", "train": 420, "val": 50, "test": 100, "total": 570}, {"category": "bandaging", "train": 419, "val": 50, "test": 100, "total": 569}, {"category": "disc golfing", "train": 415, "val": 50, "test": 100, "total": 565}, {"category": "hoverboarding", "train": 414, "val": 50, "test": 100, "total": 564}, {"category": "vault", "train": 412, "val": 50, "test": 100, "total": 562}, {"category": "cutting nails", "train": 413, "val": 49, "test": 98, "total": 560}, {"category": "carrying baby", "train": 408, "val": 50, "test": 100, "total": 558}, {"category": "planting trees", "train": 407, "val": 50, "test": 100, "total": 557}, {"category": "checking tires", "train": 405, "val": 50, "test": 100, "total": 555}, {"category": "ice fishing", "train": 405, "val": 50, "test": 100, "total": 555}, {"category": "eating watermelon", "train": 400, "val": 50, "test": 100, "total": 550}, {"category": "using remote controller (not gaming)", "train": 401, "val": 50, "test": 98, "total": 549}, {"category": "kicking soccer ball", "train": 394, "val": 50, "test": 100, "total": 544}, {"category": "pumping gas", "train": 396, "val": 49, "test": 99, "total": 544}, {"category": "assembling computer", "train": 394, "val": 50, "test": 98, "total": 542}, {"category": "skiing slalom", "train": 390, "val": 50, "test": 99, "total": 539}, {"category": "waxing back", "train": 387, "val": 50, "test": 100, "total": 537}, {"category": "ironing", "train": 387, "val": 49, "test": 99, "total": 535}, {"category": "brush painting", "train": 385, "val": 49, "test": 98, "total": 532}, {"category": "eating doughnuts", "train": 379, "val": 49, "test": 100, "total": 528}, {"category": "playing controller", "train": 374, "val": 50, "test": 100, "total": 524}, {"category": "hugging", "train": 368, "val": 49, "test": 100, "total": 517}, {"category": "eating carrots", "train": 366, "val": 50, "test": 100, "total": 516}, {"category": "clay pottery making", "train": 363, "val": 50, "test": 100, "total": 513}, {"category": "swing dancing", "train": 363, "val": 50, "test": 99, "total": 512}, {"category": "shaving legs", "train": 360, "val": 50, "test": 99, "total": 509}, {"category": "skydiving", "train": 355, "val": 50, "test": 100, "total": 505}, {"category": "sneezing", "train": 355, "val": 50, "test": 100, "total": 505}, {"category": "parkour", "train": 357, "val": 48, "test": 99, "total": 504}, {"category": "egg hunting", "train": 350, "val": 50, "test": 100, "total": 500}, {"category": "testifying", "train": 347, "val": 50, "test": 100, "total": 497}, {"category": "riding mountain bike", "train": 346, "val": 49, "test": 100, "total": 495}, {"category": "eating cake", "train": 344, "val": 50, "test": 100, "total": 494}, {"category": "clapping", "train": 343, "val": 49, "test": 99, "total": 491}, {"category": "skipping rope", "train": 338, "val": 50, "test": 100, "total": 488}, {"category": "wrestling", "train": 339, "val": 50, "test": 99, "total": 488}, {"category": "juggling soccer ball", "train": 334, "val": 50, "test": 100, "total": 484}, {"category": "punching person (boxing)", "train": 340, "val": 49, "test": 94, "total": 483}, {"category": "swinging on something", "train": 333, "val": 49, "test": 100, "total": 482}, {"category": "training dog", "train": 332, "val": 50, "test": 99, "total": 481}, {"category": "answering questions", "train": 328, "val": 50, "test": 100, "total": 478}, {"category": "applying cream", "train": 328, "val": 50, "test": 100, "total": 478}, {"category": "auctioning", "train": 328, "val": 50, "test": 100, "total": 478}, {"category": "massaging feet", "train": 328, "val": 50, "test": 100, "total": 478}, {"category": "setting table", "train": 329, "val": 50, "test": 99, "total": 478}, {"category": "skiing crosscountry", "train": 327, "val": 50, "test": 100, "total": 477}, {"category": "riding a bike", "train": 328, "val": 49, "test": 99, "total": 476}, {"category": "riding mule", "train": 326, "val": 50, "test": 100, "total": 476}, {"category": "playing flute", "train": 325, "val": 50, "test": 100, "total": 475}, {"category": "sword fighting", "train": 323, "val": 50, "test": 100, "total": 473}, {"category": "strumming guitar", "train": 322, "val": 50, "test": 100, "total": 472}, {"category": "spraying", "train": 320, "val": 50, "test": 100, "total": 470}, {"category": "hockey stop", "train": 318, "val": 50, "test": 100, "total": 468}, {"category": "playing kickball", "train": 318, "val": 50, "test": 100, "total": 468}, {"category": "cooking sausages", "train": 318, "val": 50, "test": 99, "total": 467}, {"category": "pushing wheelchair", "train": 315, "val": 50, "test": 100, "total": 465}, {"category": "slapping", "train": 317, "val": 50, "test": 98, "total": 465}, {"category": "making a cake", "train": 313, "val": 50, "test": 100, "total": 463}, {"category": "tossing salad", "train": 314, "val": 50, "test": 99, "total": 463}, {"category": "doing aerobics", "train": 312, "val": 50, "test": 99, "total": 461}, {"category": "doing laundry", "train": 311, "val": 50, "test": 100, "total": 461}, {"category": "tossing coin", "train": 312, "val": 50, "test": 99, "total": 461}, {"category": "changing wheel", "train": 311, "val": 50, "test": 98, "total": 459}, {"category": "peeling potatoes", "train": 307, "val": 50, "test": 100, "total": 457}, {"category": "breading or breadcrumbing", "train": 304, "val": 50, "test": 100, "total": 454}, {"category": "cracking neck", "train": 300, "val": 50, "test": 99, "total": 449}, {"category": "cleaning pool", "train": 297, "val": 50, "test": 100, "total": 447}, {"category": "sign language interpreting", "train": 304, "val": 48, "test": 94, "total": 446}, {"category": "drawing", "train": 296, "val": 49, "test": 100, "total": 445}, {"category": "shooting goal (soccer)", "train": 295, "val": 50, "test": 99, "total": 444}, {"category": "stomping grapes", "train": 294, "val": 50, "test": 100, "total": 444}, {"category": "faceplanting", "train": 291, "val": 50, "test": 100, "total": 441}, {"category": "garbage collecting", "train": 292, "val": 50, "test": 99, "total": 441}, {"category": "making a sandwich", "train": 290, "val": 50, "test": 100, "total": 440}, {"category": "exercising with an exercise ball", "train": 290, "val": 48, "test": 100, "total": 438}, {"category": "making sushi", "train": 284, "val": 50, "test": 100, "total": 434}, {"category": "laying bricks", "train": 282, "val": 50, "test": 100, "total": 432}, {"category": "building cabinet", "train": 281, "val": 50, "test": 100, "total": 431}, {"category": "bee keeping", "train": 280, "val": 50, "test": 100, "total": 430}, {"category": "gargling", "train": 281, "val": 50, "test": 99, "total": 430}, {"category": "holding snake", "train": 280, "val": 50, "test": 100, "total": 430}, {"category": "waiting in line", "train": 280, "val": 50, "test": 100, "total": 430}, {"category": "plastering", "train": 278, "val": 50, "test": 100, "total": 428}, {"category": "running on treadmill", "train": 279, "val": 50, "test": 99, "total": 428}, {"category": "building shed", "train": 278, "val": 50, "test": 99, "total": 427}, {"category": "making tea", "train": 276, "val": 50, "test": 100, "total": 426}, {"category": "moving furniture", "train": 276, "val": 50, "test": 100, "total": 426}, {"category": "reading newspaper", "train": 274, "val": 50, "test": 100, "total": 424}, {"category": "rock scissors paper", "train": 274, "val": 50, "test": 100, "total": 424}, {"category": "sharpening knives", "train": 274, "val": 50, "test": 100, "total": 424}, {"category": "washing hair", "train": 277, "val": 49, "test": 97, "total": 423}, {"category": "news anchoring", "train": 270, "val": 50, "test": 100, "total": 420}, {"category": "water sliding", "train": 270, "val": 50, "test": 100, "total": 420}, {"category": "jogging", "train": 269, "val": 50, "test": 98, "total": 417}, {"category": "exercising arm", "train": 267, "val": 50, "test": 99, "total": 416}, {"category": "whistling", "train": 266, "val": 50, "test": 100, "total": 416}, {"category": "grinding meat", "train": 265, "val": 50, "test": 100, "total": 415}, {"category": "recording music", "train": 265, "val": 50, "test": 100, "total": 415}, {"category": "climbing a rope", "train": 263, "val": 50, "test": 100, "total": 413}, {"category": "applauding", "train": 261, "val": 50, "test": 100, "total": 411}, {"category": "bending metal", "train": 260, "val": 50, "test": 100, "total": 410}, {"category": "drumming fingers", "train": 259, "val": 50, "test": 100, "total": 409}, {"category": "swinging legs", "train": 259, "val": 50, "test": 100, "total": 409}, {"category": "springboard diving", "train": 257, "val": 50, "test": 99, "total": 406}, {"category": "unloading truck", "train": 256, "val": 50, "test": 100, "total": 406}, {"category": "blowing leaves", "train": 255, "val": 50, "test": 100, "total": 405}, {"category": "digging", "train": 255, "val": 50, "test": 99, "total": 404}, {"category": "cooking on campfire", "train": 254, "val": 50, "test": 99, "total": 403}, {"category": "drinking shots", "train": 255, "val": 49, "test": 99, "total": 403}, {"category": "shredding paper", "train": 253, "val": 50, "test": 100, "total": 403}, {"category": "sniffing", "train": 251, "val": 48, "test": 100, "total": 399}, {"category": "yawning", "train": 249, "val": 50, "test": 99, "total": 398}, {"category": "tying bow tie", "train": 237, "val": 50, "test": 100, "total": 387}, {"category": "using segway", "train": 238, "val": 50, "test": 99, "total": 387}, {"category": "taking a shower", "train": 228, "val": 50, "test": 100, "total": 378}];
+
+                // Prepare data
+                const categories = categoryData.map(d => d.category);
+                const trainValues = categoryData.map(d => d.train);
+                const valValues = categoryData.map(d => d.val);
+                const testValues = categoryData.map(d => d.test);
+                const totalValues = categoryData.map(d => d.total);
+
+                // Chart 1: All categories bar chart
+                const ctx1 = document.getElementById('allCategoriesChart').getContext('2d');
+                new Chart(ctx1, {
+                    type: 'bar',
+                    data: {
+                        labels: categories,
+                        datasets: [{
+                            label: 'Train',
+                            data: trainValues,
+                            backgroundColor: 'rgba(46, 204, 113, 0.7)',
+                            borderColor: 'rgba(46, 204, 113, 1)',
+                            borderWidth: 1
+                        }, {
+                            label: 'Val',
+                            data: valValues,
+                            backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                            borderColor: 'rgba(52, 152, 219, 1)',
+                            borderWidth: 1
+                        }, {
+                            label: 'Test',
+                            data: testValues,
+                            backgroundColor: 'rgba(231, 76, 60, 0.7)',
+                            borderColor: 'rgba(231, 76, 60, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Sample Counts per Category (All 400 Categories)',
+                                font: { size: 16, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: false,
+                                title: {
+                                    display: true,
+                                    text: 'Category Index'
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Number of Samples'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Chart 2: Distribution histogram
+                const ctx2 = document.getElementById('distributionChart').getContext('2d');
+                
+                // Create bins for histogram
+                const maxVal = Math.max(...trainValues, ...valValues, ...testValues);
+                const bins = 50;
+                const binSize = maxVal / bins;
+                
+                function createHistogram(data) {
+                    const hist = new Array(bins).fill(0);
+                    data.forEach(val => {
+                        const binIndex = Math.min(Math.floor(val / binSize), bins - 1);
+                        hist[binIndex]++;
+                    });
+                    return hist;
+                }
+                
+                const trainHist = createHistogram(trainValues);
+                const valHist = createHistogram(valValues);
+                const testHist = createHistogram(testValues);
+                const binLabels = Array.from({length: bins}, (_, i) => Math.floor(i * binSize));
+
+                new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: binLabels,
+                        datasets: [{
+                            label: 'Train',
+                            data: trainHist,
+                            backgroundColor: 'rgba(46, 204, 113, 0.6)',
+                            borderColor: 'rgba(46, 204, 113, 1)',
+                            borderWidth: 1
+                        }, {
+                            label: 'Val',
+                            data: valHist,
+                            backgroundColor: 'rgba(52, 152, 219, 0.6)',
+                            borderColor: 'rgba(52, 152, 219, 1)',
+                            borderWidth: 1
+                        }, {
+                            label: 'Test',
+                            data: testHist,
+                            backgroundColor: 'rgba(231, 76, 60, 0.6)',
+                            borderColor: 'rgba(231, 76, 60, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Distribution of Sample Counts per Category',
+                                font: { size: 16, weight: 'bold' }
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Number of Samples'
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Number of Categories'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Chart 3: Total samples per category
+                const ctx3 = document.getElementById('totalSamplesChart').getContext('2d');
+                new Chart(ctx3, {
+                    type: 'bar',
+                    data: {
+                        labels: categories,
+                        datasets: [{
+                            label: 'Total Samples',
+                            data: totalValues,
+                            backgroundColor: 'rgba(155, 89, 182, 0.7)',
+                            borderColor: 'rgba(155, 89, 182, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Total Samples per Category (Train + Val + Test)',
+                                font: { size: 16, weight: 'bold' }
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: false,
+                                title: {
+                                    display: true,
+                                    text: 'Category Index'
+                                }
+                            },
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Total Samples'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Chart 4: Top 20 and Bottom 20
+                const top20 = categoryDataSorted.slice(0, 20);
+                const bottom20 = categoryDataSorted.slice(-20).reverse();
+                const topBottomCategories = top20.map(d => d.category).concat(bottom20.map(d => d.category));
+                const topBottomTotals = top20.map(d => d.total).concat(bottom20.map(d => d.total));
+                const topBottomColors = Array(20).fill('rgba(39, 174, 96, 0.7)').concat(Array(20).fill('rgba(192, 57, 43, 0.7)'));
+
+                const ctx4 = document.getElementById('topBottomChart').getContext('2d');
+                new Chart(ctx4, {
+                    type: 'bar',
+                    data: {
+                        labels: topBottomCategories,
+                        datasets: [{
+                            label: 'Total Samples',
+                            data: topBottomTotals,
+                            backgroundColor: topBottomColors,
+                            borderColor: topBottomCategories.map((_, i) => i < 20 ? 'rgba(39, 174, 96, 1)' : 'rgba(192, 57, 43, 1)'),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Top 20 (Green) and Bottom 20 (Red) Categories by Total Samples',
+                                font: { size: 16, weight: 'bold' }
+                            },
+                            legend: {
+                                display: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Total Samples'
+                                }
+                            },
+                            y: {
+                                ticks: {
+                                    font: { size: 10 }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Populate table
+                const tableBody = document.getElementById('tableBody');
+                function populateTable(data) {
+                    tableBody.innerHTML = '';
+                    data.forEach(item => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${item.category}</td>
+                            <td>${item.train.toLocaleString()}</td>
+                            <td>${item.val.toLocaleString()}</td>
+                            <td>${item.test.toLocaleString()}</td>
+                            <td><strong>${item.total.toLocaleString()}</strong></td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                }
+                populateTable(categoryData);
+
+                // Search functionality
+                document.getElementById('searchBox').addEventListener('input', function(e) {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const filtered = categoryData.filter(item => 
+                        item.category.toLowerCase().includes(searchTerm)
+                    );
+                    populateTable(filtered);
+                });
+
+                console.log('Charts initialized successfully!');
+            } catch (error) {
+                document.getElementById('errorMsg').style.display = 'block';
+                document.getElementById('errorMsg').innerHTML = 
+                    'Error initializing charts: ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
